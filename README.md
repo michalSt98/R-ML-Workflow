@@ -1,2 +1,2 @@
 # R-ML-Workflow
-Sample machine learning workflow with R
+Sample machine learning workflows with R
