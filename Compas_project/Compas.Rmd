@@ -1,0 +1,276 @@
+---
+title: "Projekt 1 - Raport"
+author: "Witold Merkel, Adam Rydelek, Michał Stawikowski"
+date: "`r format(Sys.time(), '%d - %m - %Y')`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    code_folding: hide
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Abstrakt
+
+Celem tego projektu było znalezienie najlepszego modelu przewidującego recydywę na podstawie zbioru [COMPASS](https://www.kaggle.com/danofer/compass). Miarą, na której się skupiliśmy to `AUC`. Początkową fazą projektu było **Exploratory Data Analysis (EDA)**. Dzięki analizie danych wyciągneliśmy zależności między zmiennymi i ich charakterystykę. Kolejną częścią projektu był **Feature Engineering**. Stworzyliśmy dodatkowe zmienne: `custody_count`, `custody_time`, `jail_time` oraz `bust_date`. Okazały się one bardzo istotne w kontekście dokładności predykcji. Przygotowaliśmy ramkę danych grupując obserwacje na podstawie konkretnej osoby. Następnie porównaliśmy wpływ **Impact Encoding** i **One Hot Encoding** na wyniki predykcji. Po analizie wykorzystaliśmy metodę One Hot Encoding oraz łącznie rzadkich poziomów. Na koniec tej fazy wytypowaliśmy kilka modeli do dalszej pracy.<br/>
+W finalnym etapie projektu wykonaliśmy **Strojenie Hiperparametrów** na 3 najlepszych modelach. Hiperparametrów szukaliśmy za pomocą metod `Random Search`, `Grid Search` oraz `Optymalizacji Bayesowskiej`. Najlepszy wystrojony model osiągnął `AUC` na poziomie ~0.8, co było poprawwą o 10 punktow procentowych względem wyników otrzymanych na surowych danych za pomocą niestrojonych modelów. 
+
+# EDA
+
+Celem tej fazy projektu jest przeprowadzenie eksploracyjnej analizy danych na zbiorze `Compass`. Zaczniemy od krótkiego przedstawienia danych.
+
+Na potrzeby lepszego zrozumienia i wizualizacji zależności pomiędzy zmiennymi, a także analizy samych zmiennych stworzyliśmy nowe kolumny.
+Są nimi:
+
+* `custody_count` - opisująca ilość aresztowań,
+* `custody_sum` - zawierająca ilość dni spędzonych w areszcie,
+* `jail_time` - mówiąca nam ile dni przestępca spędził w więzieniu,
+* `bust_date` - zmienna stworzona przez scalenie dwóch bardzo niekompletnych kolumn w jedną, dzięki czemu uzyskaliśmy przybliżoną datę zatrzymania przestępcy.
+
+## Brakujące dane
+
+<center>
+
+![Tabela 1: Struktura surowych danych](1.png)
+
+</center>
+Po przeanalizowaniu struktury danych można zauważyć znaczną ilość brakujących danych, która powoduje, że żaden wiersz nie jest kompletny. Postanowiliśmy się temu bliżej przyjrzeć.
+
+![Wykres 1: Brakujące wartości w początkowych danych](2.png)
+
+Zauważyliśmy, że zmienne `c_arrest_date`, oraz `c_offense_date` mają najwięcej braków, więc spróbowaliśmy zająć się tym problemem za pomocą dodania wcześniej opisanej zmiennej: `bust_date`. Jest ona połączeniem dwóch zmiennych ze znaczną ilością braków w jedną, która dość dokładnie określa datę zatrzymania przestępcy. Zmienne `c_jail_in`, oraz `c_jail_out` zamieniliśmy na zmienną `jail_time`, która określała łączny czas <br/> w więzieniu. Poniżej zwizualizowaliśmy efekty tego działania.
+
+<center>
+
+![Tabela 2: Struktura obrobionych danych](3.png)
+
+</center>
+
+Z tabeli struktury danych po obróbce można zauważyć, że liczba missing values bardzo znacznie spadła, a liczba `complete_rows` wzrosła do aż 9895, co stanowi **95,77%** wszystkich wierszy. Zobaczmy teraz, jak prezentuje się wykres brakujących danych.
+
+![Wykres 2: Brakujące wartości w obrobionych danych](4.png)
+
+Można zauważyć na wykresie, że liczba brakujących danych jest już na akceptowalnym poziomie, a pozostałe wartości brakujące uznaliśmy za akceptowalne. 
+
+## Zależności 
+
+Po przeanalizowaniu struktury zbioru danych i jego modyfikacji uznaliśmy, że sprawdzimy korelację między poszczególnymi zmiennymi.
+
+![Wykres 3: Zależności zmiennych.](8.png)
+
+Na wykresie korelacji można zauważyć silną zależność przewidywanej zmiennej `is_recid` od dodanej przez nas zmiennej `custody_count`. Postanowiliśmy zwizualizować tą relację, aby lepiej ją zrozumieć.
+
+![Wykres 4: Zależność recydywy od liczby pobytów w areszcie](9.png)
+
+Na wykresie można zauważyć, że prawdopodobieństwo recydywy rośnie wraz z `custody_count`, a od wartości 9 już otrzymujemy wartość 100% recydywy, co potwierdza wpływ zmiennej.
+
+![Wykres 5: Rozkład rasy w zależności od wieku](10.png)
+
+Wykres przedstawia jasną zależność, że młodzi ludzie popełniają więcej przestępstw, a wartość największa jest otrzymywana dla wieku *25* lat. Można również zauważyć, że w tym wieku wyróżnia się jedna rasa, dla której wartości są największe i jest nią **African-American**.
+
+![Wykres 6: Przestępczość w różnych miesiącach](11.png)
+
+Dzięki wykresowy można zauważyć znaczny spadek ilości przewinień w okresie wakacyjnym, oraz stosunkowo równy w pozostałych okresach. Największą ilość przestępstw zanotowano jednak w Styczniu.
+
+![Wykres 7: Wpływ jail_time i custody_count na recydywę](12.png)
+
+Na wykresie można zauważyć, że dla zaznaczonego prostokąta znaczna większość wyników okazuje się być recydywistami. Można z tego wysnuć wniosek, że większa ilość custody_count, ale niższa czasu odsiadki oznacza większe prawdopodobieństwo na recydywę. 
+
+## Podsumowanie fazy
+
+Podsumowując, dzięki eskploracji danych znaleźliśmy rozwiązanie problemu braków danych, które również pozwoliło nam na uzyskanie nowych zmiennych ze znacznym wpływem na przewidywaną zmienną. Przeanalizowaliśmy dokładnie wpływy różnych zmiennych, co pozwoliło nam na sprofilowanie osoby z największym prawdopodobieństwem na ponowne osadzenie w więzieniu: około 25 letni Afro-Amerykanin z dużą liczbą aresztowań w przeszłości i średnią długością odsiadki wyroku. Uzyskaliśmy w ten sposób wszystkie potrzebne dane, aby przejść do kolejnej fazy.
+
+# Feature Engineering
+
+Celem tej fazy było przedstawienie jakich zmian dokonaliśmy w wyjściowej ramce danych w ramach inżynierii danych oraz zaprezentowanie wyników kilkunastu modeli jeszcze bez strojenia hiperparametrów. Na początku omówimy wpływ wybierania i dodawania kolumn na skuteczność klasyfikacji, później spróbujemy wybrać najlepsze w naszym przypadku kodowanie zmiennych kategorycznych. Na koniec przetestujemy kilkanaście klasyfikatorów na obronionej już ramce danych i wybierzemy kilka najlepszych.
+
+## Nowe zmienne
+
+<center>
+
+![Tabela 3: Nowe zmienne](13.png)
+
+</center>
+
+![Wykres 8: Istotność poszczególnych zmiennych. Widać, że wszystkie nowe zmienne plasują sie w czołówce.](14.png)
+
+## Grupowanie zmiennych
+
+Sprawdziliśmy też, czy grupowanie poziomów zmiennych w większe `kubełki` wniesie jakąś poprawę do jakośći predykcji.
+
+### Sezon
+
+Na początku zajęliśmy się zmienną `bust_date`, którą zastąpiliśmy bardziej ogólną zmienną `sezon`, która ograniczałą się tylko do pory roku, a nie do dokładnej daty.
+
+<center>
+
+![Tabela 4: Wyniki kroswalidacji z dokładną datą. ](22.png)
+
+</center>
+
+<center>
+
+![Tabela 5: Wyniki kroswalidacji ze zmienną sezon. ](21.png)
+
+</center>
+
+Można zauważyć drobną poprawę pod względem AUC, według którego kierowaliśmy się podczas tego projektu. W dalszych rozważaniach będziemy poługiwać sie zmienną uproszczoną.
+
+### Kategoria wiekowa
+
+Kolejną zmienną, którą chcieliśmy uprościć był wiek podejrzanego o recydywę. Pogrupowaliśmy zmienną na trzy kategorie wiekowe i porównaliśmy wyniki.
+
+<center>
+
+![Tabela 6: Wyniki kroswalidacji z dokładnym wiekiem. ](23.png)
+
+</center>
+
+<center>
+
+![Tabela 7: Wyniki kroswalidacji z grupą wiekową. ](24.png)
+
+</center>
+
+W tym przpadku uzyskaliśmy odwrotne wyniki. AUC dla oryginalnej zmiennej osiągnęło wyższy wynik, więc tej zmiennej nie modyfikowaliśmy.
+
+
+## Kodowanie zmiennych
+
+Po grupowaniu zmiennych przyjrzeliśmy się kodowaniu zmiennych. Na ramce danych zastosowaliśmy dwie metody:
+
+* `Impact encoding`
+* `One Hot encoding` z łączeniem rzadkich poziomów
+
+Zdecydowaliśmy się na połączenie poziomów min. w zmiennej `ChargeDescription`, gdyż zawierała ona znaczną ilość unikalnych wartości. Rozważyliśmy trzy liczby pozostawionych poziomów: 30, 75, 125.
+Obie metody poprawiły jakość predykcji, jednak więcej wniosła druga metoda z 75 poziomami, dzięki której w połączeniu z poprzednimi zabiegami osiągnęliśmy AUC na poziomie `0.773`.
+
+## Normalizacja danych
+
+Następnym etapem była normalizacja danych. Chcieliśmy sprawdzić czy `skalowanie` albo `standaryzacja` zmiennych numerycznych poprawi nasze wyniki.
+
+### Standaryzacja
+
+<center>
+
+![Tabela 8: Wyniki kroswalidacji po standaryzacji. ](25.png)
+
+</center>
+
+### Skalowanie
+
+<center>
+
+![Tabela 8: Wyniki kroswalidacji po skalowaniu. ](26.png)
+
+</center>
+
+Oba zabiegi niestety nie poprawiły otrzymanych wcześniej wyników, a nawet je pogorszyły - w przypadku skalowania.
+
+## Testowanie modeli
+
+Ostatnim etapem tej fazy było porównanie różnych modeli w celu wybrania kandydatów do strojenia hiperparametreów w następnej fazie. Do porównanie wybraliśmy min. `algorytmy drzewiaste`, `boosting`, `lasy losowe`, `bagging` czy `sieci głębokie`.
+
+<center>
+
+![Tabela 9: Porównanie przykładowych modeli](15.png)
+
+</center>
+
+## Podsumowanie fazy
+
+W fazie drugiej naszym celem było przygotowanie danych do użytku przez algorytmy uczenia maszynowego. Przeprowadziliśmy szereg wyżej opisanych zabiegów, podczas których kierowaliśmy się poprawą miary `AUC`. Dzięki inżynierii cech udało nam się osiągnąć `0.773` AUC.
+
+# Strojenie hiperparametrów
+
+Celem tej fazy było przedstawienie procesu strojenia hiperparametrów wybranych trzech modeli, a następnie omówienie po krótce otrzymanych wyników oraz skomentowanie całego projektu. Sprawdzimy jak bardzo różnią się modele otrzymane poprzez strojenie od tych z domyślnymi ustawieniami. Zestawu najlepszych hiperparametrów szukaliśmy przy pomocy: `Gird Search`, `Random Search` oraz `Optymalizacji Bayesowskiej`. Dla przypomnienia w ostatniej fazie wybraliśmy następujące modele:
+
+<center>
+
+![Tabela 5: Najlepsze modele, wybrane z poprzedniej fazy.](16.png)
+
+</center>
+
+## C50
+
+Zamiast algorytmu `classif.boosting`, chociaż osiągał bardzo dobre wyniki, wybraliśmy drzewaiasty algorytm `C50`, ponieważ ten pierwszy wymagał dużej mocy obliczeniowej, a biorąc pod uwagę dostępne nam komputery także dużo czasu. W konsekwencji nie bylibyśmy w stanie przeprowadzić zadowalającej nas liczby prób <br/> w skończonym czasie.
+
+Dla algorytmu `C50` stroiliśmy dwa hiperparametry:
+
+* `CF` - tak zwany Confidence Factor,
+* `trials` - liczba iteracji
+
+Przed strojeniem wartości to:
+
+* `AUC` = 0.7503425,
+* `ACC` = 0.7478219.
+
+![Wykres 9: Zależność AUC od liczby trials](17.png)
+
+![Wykres 10: Zależność AUC od CF przy ustalonej liczbie trials](18.png)
+
+Dla tego algorytmu okazało się, że liczba `trials` równa 23 daje ogółem optymalne wyniki, oraz, że `CF` równe 0.25 jest najlepsze i w ten sposób otrzymaliśmy parametry z zadowalającymi wynikami:
+
+* `AUC` = 0.7918562,
+* `ACC` = 0.7437764.
+
+Widać, że jest to znaczna poprawa `AUC`, bo aż o 4 punkty procentowe względem początku, a `ACC` tylko minimalnie się pogorszyło.
+
+## H2O.RANDOMFOREST
+
+Dla tego algorytmu stroiliśmy trzy hiperparametry:
+
+* `ntrees` - czyli liczba użytych drzew decyzyjnych, parametr ten ma bardzo duży wpływ na czas obliczeń
+* `max_depth` - który odpowiada za maksymalną głębokość drzew,
+* `nbins` - odpowiadający za dzielenie danych na grupy.
+
+Dla tego algorytmu ważnym parametrem jest również `mtries`, ale okazało się że dla niego optymalna jest zawsze wartość domyślna, więc aby nie zaciemniać postanowiliśmy ją wykluczyć z rozważań.
+
+Przed strojeniem wartości metryk były już bardzo wysokie, a mianowicie:
+
+* `AUC` = 0.7755033,
+* `ACC` = 0.7647628.
+
+![Wykres 11: Zależność AUC od liczby kubełków.](19.png)
+
+Dla tego algorytmu okazało się, że optymalne wartości to: 
+
+* `nbins` = 242,
+* `ntrees` = 232, 
+* `max_depth` = 17.
+
+Dla tego algorytmu otrzymaliśmy wartości niemalże identyczne z poprzednim pod względem `AUC`, ale lepsze jeżeli chodzi o `ACC`:
+
+* `AUC` = 0.7918085,
+* `ACC` = 0.7763901.
+
+## H2O.GBM
+
+Optymalnych parametrów będziemy szukać na dwa spodoby: grid searchem oraz random searchem. Po przeczytaniu różnych artykułów zdecydowaliśmy, że najważniejsze oraz wprowadzające największe zmiany parametry tego modelu to:
+
+* `ntrees` - parametr odpowiadający za ilość drzew,
+* `max_depth` - odpowiada za maksymalną głębokość,
+* `learn_rate` - jak model się uczy,
+* `nbins` - na ile kubełków zostaną podzielone dane.
+
+Przedstawimy jak sprawuje się model z domyślnymi parametrami:
+
+* `AUC` = 0.7962832,
+* `ACC` = 0.7647628.
+
+![Wykres 12: Zależność AUC od liczby drzew dla innych losowych parametrów.](20.png)
+
+W przypadku tego algorytmu nie udało się znaleźć lepszego zestawu hiperparametrów niż domyślny, pomimo 1296 prób na gridzie i 2000 losowych prób.
+
+## Podsumowanie fazy
+
+Każdy model po strojeniu hiperparametrów bardzo zbliżył się do progu 0.8 `AUC`, przekroczenie go to prawdopodobnie kwestia większej ilości iteracji w celu poszukiwania jeszcze lepszych parametrów. Jest to zadawalający wynik biorąc pod uwagę początkowe ~0.7 `AUC`.
+
+# Podsumowanie projektu
+
+Podsumowując, znaleźliśmy model, którego wyniki są zadowalające. Udało nam się to osiągnąć między innymi dzięki poprawnej analizie eksploracyjnej zbioru danych, która pozwoliła nam na poprawne odnalezienie zależności między zmiennymi. Dzięki skondensowaniu odpowiednich cech zmniejszyliśmy liczbę brakujących wartości, oraz dodaliśmy zmienne, które okazały się istotne dzięki przeprowadzeniu badań zależności recydywy od zmiennych. Sprawdziliśmy po kolei różne warianty zmiennych określających wiek przestępcy, oraz czas popełnienia wykroczenia, dzięki czemu otrzymaliśmy optymalne cechy do dalszej pracy. Po próbach przeprowadzenia Impact Encoding, One Hot Encoding oraz standaryzacji, czy skalowania uznaliśmy, że wykorzystamy One Hot Encoding <br/> z ograniczeniem liczby unikalnych poziomów. Następnie na już gotowej ramce danych wybraliśmy trzy modele, które dawały najlepsze rezultaty: GBM, C50, oraz Random Forest. Na nich przeprowadziliśmy tuning parametrów na trzy różne sposoby i zarówno w przypadku Random Forest, jak i C50 otrzymaliśmy poprawę. Na koniec udało nam się więc uzyskać trzy modele, których AUC wynosiło ponad 79%, a najlepsze Accuracy, jakie otrzymaliśmy wyniosło ponad 77,5% dla Random Forest'a po tuningu parametrów. Uważamy ten wynik za sukces, na który złożyły się wszystkie trzy fazy projektu.
